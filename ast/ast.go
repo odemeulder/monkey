@@ -211,7 +211,7 @@ func (ce *CallExpression) String() string {
 	for _, arg := range ce.Arguments {
 		args = append(args, arg.String())
 	}
-	out.WriteString(ce.Token.Literal)
+	out.WriteString(ce.Function.String())
 	out.WriteString("(")
 	out.WriteString(strings.Join(args, ", "))
 	out.WriteString(")")
