@@ -154,7 +154,7 @@ func (ie *IfExpression) String() string {
 	out.WriteString(" ")
 	out.WriteString(ie.Consequence.String())
 	if ie.Alternative != nil {
-		out.WriteString(" else")
+		out.WriteString(" else ")
 		out.WriteString(ie.Alternative.String())
 	}
 	return out.String()
@@ -215,6 +215,21 @@ func (ce *CallExpression) String() string {
 	out.WriteString("(")
 	out.WriteString(strings.Join(args, ", "))
 	out.WriteString(")")
+	return out.String()
+}
+
+type IncrementExpression struct {
+	Token    token.Token
+	Value    Expression
+	Operator string
+}
+
+func (ie *IncrementExpression) expressionNode()      {}
+func (ie *IncrementExpression) TokenLiteral() string { return ie.Token.Literal }
+func (ce *IncrementExpression) String() string {
+	var out bytes.Buffer
+	out.WriteString(ce.Token.Literal)
+	out.WriteString(ce.Value.String())
 	return out.String()
 }
 

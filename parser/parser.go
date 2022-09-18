@@ -69,6 +69,8 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerPrefix(token.LPAREN, p.parseGroupedExpression)
 	p.registerPrefix(token.IF, p.parseIfExpression)
 	p.registerPrefix(token.FUNCTION, p.parseFunctionLiteral)
+	p.registerPrefix(token.PLUSPLUS, p.parsePrefixExpression)
+	p.registerPrefix(token.MINUSMINUS, p.parsePrefixExpression)
 
 	p.infixParseFns = make(map[token.TokenType]infixParseFn)
 	p.registerInfix(token.PLUS, p.parseInfixExpression)
@@ -183,7 +185,7 @@ func (p *Parser) noPrefixParseFnFound(t token.TokenType) {
 }
 
 func (p *Parser) parseExpression(predence int) ast.Expression {
-	defer untrace(trace("parseExpression"))
+	// defer untrace(trace("parseExpression"))
 	prefix, ok := p.prefixParseFns[p.currToken.Type]
 	if !ok {
 		p.noPrefixParseFnFound(p.currToken.Type)
@@ -343,14 +345,14 @@ func (p *Parser) parseFunctionParameters() []*ast.Identifier {
 }
 
 func (p *Parser) parseCallExpression(function ast.Expression) ast.Expression {
-	defer untrace(trace("parseCallExpression"))
+	// defer untrace(trace("parseCallExpression"))
 	ce := &ast.CallExpression{Token: p.currToken, Function: function}
 	ce.Arguments = p.parseCallArguments()
 	return ce
 }
 
 func (p *Parser) parseCallArguments() []ast.Expression {
-	defer untrace(trace("parseCallArguments"))
+	// defer untrace(trace("parseCallArguments"))
 	args := []ast.Expression{}
 	if p.peekTokenIs(token.RPAREN) {
 		p.nextToken()

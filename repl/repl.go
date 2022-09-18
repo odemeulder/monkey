@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 
+	"demeulder.us/monkey/evaluator"
 	"demeulder.us/monkey/lexer"
 	"demeulder.us/monkey/parser"
 )
@@ -23,12 +24,19 @@ func Start(in io.Reader, out io.Writer) {
 		l := lexer.New(line)
 		p := parser.New(l)
 		program := p.ParseProgram()
+
 		if len(p.Errors()) != 0 {
 			printParserErrors(out, p.Errors())
 			continue
 		}
-		io.WriteString(out, program.String())
-		io.WriteString(out, "\n")
+
+		io.WriteString(out, fmt.Sprintf("%s\n", program.String()))
+
+		evaluated := evaluator.Eval(program)
+		if evaluated != nil {
+			io.WriteString(out, evaluated.Inspect())
+			io.WriteString(out, "\n")
+		}
 	}
 }
 

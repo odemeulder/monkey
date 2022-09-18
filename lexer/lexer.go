@@ -32,9 +32,9 @@ func (l *Lexer) NextToken() token.Token {
 	case ',':
 		tok = newToken(token.COMMA, l.ch)
 	case '+':
-		tok = newToken(token.PLUS, l.ch)
+		tok = l.twoCharToken()
 	case '-':
-		tok = newToken(token.MINUS, l.ch)
+		tok = l.twoCharToken()
 	case '*':
 		tok = newToken(token.ASTERISK, l.ch)
 	case '/':
@@ -119,6 +119,12 @@ func (l *Lexer) twoCharToken() token.Token {
 		case "||":
 			l.readChar()
 			return token.Token{Type: token.OR, Literal: literal}
+		case "++":
+			l.readChar()
+			return token.Token{Type: token.PLUSPLUS, Literal: literal}
+		case "--":
+			l.readChar()
+			return token.Token{Type: token.MINUSMINUS, Literal: literal}
 		}
 	}
 	switch l.ch {
@@ -130,6 +136,11 @@ func (l *Lexer) twoCharToken() token.Token {
 		tok = newToken(token.LT, l.ch)
 	case '>':
 		tok = newToken(token.GT, l.ch)
+	case '+':
+		tok = newToken(token.PLUS, l.ch)
+	case '-':
+		tok = newToken(token.MINUS, l.ch)
+
 	}
 	return tok
 }
