@@ -41,6 +41,9 @@ const (
 	OR         = "||"
 	PLUSPLUS   = "++"
 	MINUSMINUS = "--"
+	STRING     = "STRING"
+	RBRACKET   = "]"
+	LBRACKET   = "["
 )
 
 var keywords = map[string]TokenType{

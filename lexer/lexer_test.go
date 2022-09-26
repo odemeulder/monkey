@@ -26,7 +26,10 @@ func TestNextToken(t *testing.T) {
 	10 != 9;
 	
 	++i;
-	--y;`
+	--y;
+	"foobar"
+	"foo bar"
+	[1,2]`
 
 	tests := []struct {
 		expectedType    token.TokenType
@@ -106,6 +109,13 @@ func TestNextToken(t *testing.T) {
 		{token.MINUSMINUS, "--"},
 		{token.IDENT, "y"},
 		{token.SEMICOLON, ";"},
+		{token.STRING, "foobar"},
+		{token.STRING, "foo bar"},
+		{token.LBRACKET, "["},
+		{token.INT, "1"},
+		{token.COMMA, ","},
+		{token.INT, "2"},
+		{token.RBRACKET, "]"},
 		{token.EOF, ""},
 	}
 

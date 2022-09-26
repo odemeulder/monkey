@@ -106,6 +106,20 @@ func testBooleanObject(t *testing.T, actual object.Object, expected bool) bool {
 	return true
 }
 
+func testStringObject(t *testing.T, actual object.Object, expected string) bool {
+	result, ok := actual.(*object.String)
+	if !ok {
+		t.Errorf("Object is not an string. got=%T", actual)
+		return false
+	}
+	if result.Value != expected {
+		t.Errorf("Object is the wrong value, expected %s, got %s", expected, result.Value)
+		return false
+	}
+
+	return true
+}
+
 func TestBangOperator(t *testing.T) {
 	tests := []struct {
 		input    string
@@ -219,6 +233,10 @@ func TestErrorHandling(t *testing.T) {
 			"foobar",
 			"identifier not found: foobar",
 		},
+		{
+			`"hello" - "world"`,
+			"unknown operator: STRING - STRING",
+		},
 	}
 
 	for _, tt := range tests {
@@ -295,5 +313,65 @@ func TestFunctionApplication(t *testing.T) {
 
 	for _, tt := range tests {
 		testIntegerObject(t, testEval(tt.input), tt.expected)
+	}
+}
+
+func TestStringLiteral(t *testing.T) {
+	input := `"Hello World!"`
+
+	evaluated := testEval(input)
+	str, ok := evaluated.(*object.String)
+	if !ok {
+		t.Fatalf("object is not String. got=%T (%+v)", evaluated, evaluated)
+	}
+
+	if str.Value != "Hello World!" {
+		t.Errorf("String has wrong value. got=%q", str.Value)
+	}
+}
+
+func TestStrings(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{`"hello world"`, "hello world"},
+		{`"hello" + " " + "world!"`, "hello world!"},
+	}
+	for _, tt := range tests {
+		testStringObject(t, testEval(tt.input), tt.expected)
+	}
+}
+
+func TestBuiltinFunctions(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected interface{}
+	}{
+		{`len("")`, 0},
+		{`len("four")`, 4},
+		{`len("hello world")`, 11},
+		{`len(1)`, "argument to `len` not supported, got INTEGER"},
+		{`len("one", "two")`, "wrong number of arguments. got=2, want=1"},
+	}
+
+	for _, tt := range tests {
+		evaluated := testEval(tt.input)
+
+		switch expected := tt.expected.(type) {
+		case int:
+			testIntegerObject(t, evaluated, int64(expected))
+		case string:
+			errObj, ok := evaluated.(*object.Error)
+			if !ok {
+				t.Errorf("object is not Error. got=%T (%+v)",
+					evaluated, evaluated)
+				continue
+			}
+			if errObj.Message != expected {
+				t.Errorf("wrong error message. expected=%q, got=%q",
+					expected, errObj.Message)
+			}
+		}
 	}
 }

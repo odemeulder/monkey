@@ -91,11 +91,14 @@ func (i *IntegerLiteral) expressionNode()      {}
 func (i *IntegerLiteral) TokenLiteral() string { return i.Token.Literal }
 func (i *IntegerLiteral) String() string       { return i.Token.Literal }
 
-type PrefixExpression struct {
-	Token    token.Token
-	Operator string
-	Right    Expression
+type StringLiteral struct {
+	Token token.Token
+	Value string
 }
+
+func (s *StringLiteral) expressionNode()      {}
+func (s *StringLiteral) TokenLiteral() string { return s.Token.Literal }
+func (s *StringLiteral) String() string       { return s.Token.Literal }
 
 type Boolean struct {
 	Token token.Token
@@ -105,6 +108,31 @@ type Boolean struct {
 func (b *Boolean) expressionNode()      {}
 func (b *Boolean) TokenLiteral() string { return b.Token.Literal }
 func (b *Boolean) String() string       { return b.Token.Literal }
+
+type ArrayLiteral struct {
+	Token token.Token
+	Items []Expression
+}
+
+func (a *ArrayLiteral) expressionNode()      {}
+func (a *ArrayLiteral) TokenLiteral() string { return a.Token.Literal }
+func (a *ArrayLiteral) String() string {
+	var out bytes.Buffer
+	out.WriteString("[")
+	items := []string{}
+	for _, s := range a.Items {
+		items = append(items, s.String())
+	}
+	out.WriteString(strings.Join(items, ","))
+	out.WriteString("]")
+	return out.String()
+}
+
+type PrefixExpression struct {
+	Token    token.Token
+	Operator string
+	Right    Expression
+}
 
 func (pe *PrefixExpression) expressionNode()      {}
 func (pe *PrefixExpression) TokenLiteral() string { return pe.Token.Literal }

@@ -71,6 +71,8 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerPrefix(token.FUNCTION, p.parseFunctionLiteral)
 	p.registerPrefix(token.PLUSPLUS, p.parsePrefixExpression)
 	p.registerPrefix(token.MINUSMINUS, p.parsePrefixExpression)
+	p.registerPrefix(token.STRING, p.parseStringLiteral)
+	p.registerPrefix(token.LBRACKET, p.parseArrayLiteral)
 
 	p.infixParseFns = make(map[token.TokenType]infixParseFn)
 	p.registerInfix(token.PLUS, p.parseInfixExpression)
@@ -221,6 +223,10 @@ func (p *Parser) parseIntegerLiteral() ast.Expression {
 	return lit
 }
 
+func (p *Parser) parseStringLiteral() ast.Expression {
+	return &ast.StringLiteral{Token: p.currToken, Value: p.currToken.Literal}
+}
+
 func (p *Parser) parseBooleanExpression() ast.Expression {
 	return &ast.Boolean{Token: p.currToken, Value: p.currTokenIs(token.TRUE)}
 }
@@ -369,6 +375,25 @@ func (p *Parser) parseCallArguments() []ast.Expression {
 		return nil
 	}
 	return args
+}
+
+func (p *Parser) parseArrayLiteral() ast.Expression {
+	array := &ast.ArrayLiteral{Token: p.currToken}
+	array.Items = []ast.Expression{}
+	if p.peekTokenIs(token.RBRACKET) {
+		p.nextToken()
+		return array
+	}
+	array.Items = append(array.Items, p.parseExpression(LOWEST))
+	for p.peekTokenIs(token.COMMA) {
+		p.nextToken()
+		p.nextToken()
+		array.Items = append(array.Items, p.parseExpression(LOWEST))
+	}
+	if !p.expectPeek(token.RBRACKET) {
+		return nil
+	}
+	return array
 }
 
 var traceLevel int = 0
