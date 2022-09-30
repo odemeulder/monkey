@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"os"
 
 	"demeulder.us/monkey/evaluator"
 	"demeulder.us/monkey/lexer"
@@ -40,6 +41,30 @@ func Start(in io.Reader, out io.Writer) {
 			io.WriteString(out, evaluated.Inspect())
 			io.WriteString(out, "\n")
 		}
+	}
+}
+
+func InterpretFile(fname string) {
+
+	b, err := os.ReadFile("./programs/" + fname)
+	if err != nil {
+		io.WriteString(os.Stderr, err.Error())
+	}
+
+	l := lexer.New(string(b))
+	p := parser.New(l)
+	program := p.ParseProgram()
+
+	if len(p.Errors()) != 0 {
+		printParserErrors(os.Stdout, p.Errors())
+	}
+
+	io.WriteString(os.Stdout, fmt.Sprintf("Program:\n%s\n", program.String()))
+
+	environment := object.NewEnvironment(nil)
+	evaluated := evaluator.Eval(program, environment)
+	if evaluated != nil {
+		io.WriteString(os.Stdout, fmt.Sprintf("Result:\n%s\n", evaluated.Inspect()))
 	}
 }
 

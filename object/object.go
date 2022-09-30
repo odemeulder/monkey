@@ -3,6 +3,7 @@ package object
 import (
 	"bytes"
 	"fmt"
+	"hash/fnv"
 	"strings"
 
 	"demeulder.us/monkey/ast"
@@ -19,11 +20,22 @@ const (
 	FUNCTION_OBJ     = "FUNCTION"
 	STRING_OBJ       = "STRING"
 	BUILTIN_OBJ      = "BUILTIN"
+	ARRAY_OBJ        = "ARRAY"
+	HASH_OBJ         = "HASH"
 )
 
 type Object interface {
 	Type() ObjectType
 	Inspect() string
+}
+
+type HashKey struct {
+	Type  ObjectType
+	Value uint64
+}
+
+type Hashable interface {
+	HashKey() HashKey
 }
 
 type Integer struct {
@@ -32,6 +44,9 @@ type Integer struct {
 
 func (i Integer) Type() ObjectType { return INTEGER_OBJ }
 func (i Integer) Inspect() string  { return fmt.Sprintf("%d", i.Value) }
+func (i Integer) HashKey() HashKey {
+	return HashKey{Type: INTEGER_OBJ, Value: uint64(i.Value)}
+}
 
 type Boolean struct {
 	Value bool
@@ -39,6 +54,25 @@ type Boolean struct {
 
 func (b Boolean) Type() ObjectType { return BOOLEAN_OBJ }
 func (b Boolean) Inspect() string  { return fmt.Sprintf("Boolean Object, value %t", b.Value) }
+func (b Boolean) HashKey() HashKey {
+	if b.Value {
+		return HashKey{Type: BOOLEAN_OBJ, Value: 1}
+	} else {
+		return HashKey{Type: BOOLEAN_OBJ, Value: 0}
+	}
+}
+
+type String struct {
+	Value string
+}
+
+func (s String) Type() ObjectType { return STRING_OBJ }
+func (s String) Inspect() string  { return s.Value }
+func (s String) HashKey() HashKey {
+	hash := fnv.New64a()
+	hash.Write([]byte(s.Value))
+	return HashKey{Type: STRING_OBJ, Value: hash.Sum64()}
+}
 
 type Null struct{}
 
@@ -84,13 +118,6 @@ func (f Function) Inspect() string {
 	return out.String()
 }
 
-type String struct {
-	Value string
-}
-
-func (s String) Type() ObjectType { return STRING_OBJ }
-func (s String) Inspect() string  { return s.Value }
-
 type BuiltinFunction func(args ...Object) Object
 
 type Builtin struct {
@@ -99,3 +126,43 @@ type Builtin struct {
 
 func (f Builtin) Type() ObjectType { return BUILTIN_OBJ }
 func (f Builtin) Inspect() string  { return "builtin function" }
+
+type Array struct {
+	Items []Object
+}
+
+func (a Array) Type() ObjectType { return ARRAY_OBJ }
+func (a Array) Inspect() string {
+	var out bytes.Buffer
+	elements := []string{}
+	for _, e := range a.Items {
+		elements = append(elements, e.Inspect())
+	}
+
+	out.WriteString("[")
+	out.WriteString(strings.Join(elements, ", "))
+	out.WriteString("]")
+	return out.String()
+}
+
+type HashPair struct {
+	Key   Object
+	Value Object
+}
+
+type Hash struct {
+	Pairs map[HashKey]HashPair
+}
+
+func (h Hash) Type() ObjectType { return HASH_OBJ }
+func (h Hash) Inspect() string {
+	var out bytes.Buffer
+	pairs := []string{}
+	for _, v := range h.Pairs {
+		pairs = append(pairs, fmt.Sprintf("%s: %s", v.Key.Inspect(), v.Value.Inspect()))
+	}
+	out.WriteString("{")
+	out.WriteString(strings.Join(pairs, ", "))
+	out.WriteString("}")
+	return out.String()
+}

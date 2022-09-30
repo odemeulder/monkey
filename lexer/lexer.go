@@ -36,9 +36,9 @@ func (l *Lexer) NextToken() token.Token {
 	case '-':
 		tok = l.twoCharToken()
 	case '*':
-		tok = newToken(token.ASTERISK, l.ch)
+		tok = l.twoCharToken()
 	case '/':
-		tok = newToken(token.SLASH, l.ch)
+		tok = l.twoCharToken()
 	case '!':
 		tok = l.twoCharToken()
 	case '<':
@@ -57,6 +57,8 @@ func (l *Lexer) NextToken() token.Token {
 		tok = newToken(token.LBRACKET, l.ch)
 	case ']':
 		tok = newToken(token.RBRACKET, l.ch)
+	case ':':
+		tok = newToken(token.COLON, l.ch)
 	case '"':
 		tok.Literal = l.readString()
 		tok.Type = token.STRING
@@ -132,6 +134,24 @@ func (l *Lexer) twoCharToken() token.Token {
 		case "--":
 			l.readChar()
 			return token.Token{Type: token.MINUSMINUS, Literal: literal}
+		case "+=":
+			l.readChar()
+			return token.Token{Type: token.ASSIGNPLUS, Literal: literal}
+		case "-=":
+			l.readChar()
+			return token.Token{Type: token.ASSIGNMINUS, Literal: literal}
+		case "*=":
+			l.readChar()
+			return token.Token{Type: token.ASSIGNTIMES, Literal: literal}
+		case "/=":
+			l.readChar()
+			return token.Token{Type: token.ASSIGNSLASH, Literal: literal}
+		case "&=":
+			l.readChar()
+			return token.Token{Type: token.ASSIGNAND, Literal: literal}
+		case "|=":
+			l.readChar()
+			return token.Token{Type: token.ASSIGNOR, Literal: literal}
 		}
 	}
 	switch l.ch {
@@ -147,7 +167,10 @@ func (l *Lexer) twoCharToken() token.Token {
 		tok = newToken(token.PLUS, l.ch)
 	case '-':
 		tok = newToken(token.MINUS, l.ch)
-
+	case '*':
+		tok = newToken(token.ASTERISK, l.ch)
+	case '/':
+		tok = newToken(token.SLASH, l.ch)
 	}
 	return tok
 }

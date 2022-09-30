@@ -2,6 +2,7 @@ package ast
 
 import (
 	"bytes"
+	"fmt"
 	"strings"
 
 	"demeulder.us/monkey/token"
@@ -123,7 +124,7 @@ func (a *ArrayLiteral) String() string {
 	for _, s := range a.Items {
 		items = append(items, s.String())
 	}
-	out.WriteString(strings.Join(items, ","))
+	out.WriteString(strings.Join(items, ", "))
 	out.WriteString("]")
 	return out.String()
 }
@@ -258,6 +259,44 @@ func (ce *IncrementExpression) String() string {
 	var out bytes.Buffer
 	out.WriteString(ce.Token.Literal)
 	out.WriteString(ce.Value.String())
+	return out.String()
+}
+
+type IndexExpression struct {
+	Token token.Token
+	Left  Expression
+	Index Expression
+}
+
+func (ie *IndexExpression) expressionNode()      {}
+func (ie *IndexExpression) TokenLiteral() string { return ie.Token.Literal }
+func (ie *IndexExpression) String() string {
+	var out bytes.Buffer
+	out.WriteString("(")
+	out.WriteString(ie.Left.String())
+	out.WriteString("[")
+	out.WriteString(ie.Index.String())
+	out.WriteString("]")
+	out.WriteString(")")
+	return out.String()
+}
+
+type HashLiteral struct {
+	Token token.Token
+	Pairs map[Expression]Expression
+}
+
+func (hl *HashLiteral) expressionNode()      {}
+func (hl *HashLiteral) TokenLiteral() string { return hl.Token.Literal }
+func (hl *HashLiteral) String() string {
+	var out bytes.Buffer
+	pairs := []string{}
+	for k, v := range hl.Pairs {
+		pairs = append(pairs, fmt.Sprintf("%s: %s", k.String(), v.String()))
+	}
+	out.WriteString("{")
+	out.WriteString(strings.Join(pairs, ","))
+	out.WriteString("}")
 	return out.String()
 }
 

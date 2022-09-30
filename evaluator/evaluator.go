@@ -13,20 +13,6 @@ var (
 	FALSE = &object.Boolean{Value: false}
 )
 
-var builtins = map[string]*object.Builtin{
-	"len": &object.Builtin{
-		Fn: func(arg ...object.Object) object.Object {
-			if len(arg) == 1 {
-				if s, ok := arg[0].(*object.String); ok {
-					return &object.Integer{Value: int64(len(s.Value))}
-				}
-				return newError("argument to `len` not supported, got %s", arg[0].Type())
-			}
-			return newError("wrong number of arguments. got=%d, want=1", len(arg))
-		},
-	},
-}
-
 func Eval(node ast.Node, env *object.Environment) object.Object {
 
 	switch node := node.(type) {
@@ -86,6 +72,21 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 		return applyFunction(function, args, env)
 	case *ast.BlockStatement:
 		return evalBlockStatement(node, env)
+	case *ast.ArrayLiteral:
+		items := evalExpressions(node.Items, env)
+		return &object.Array{Items: items}
+	case *ast.IndexExpression:
+		array := Eval(node.Left, env)
+		if isError(array) {
+			return array
+		}
+		index := Eval(node.Index, env)
+		if isError(index) {
+			return index
+		}
+		return evalIndexExpression(array, index)
+	case *ast.HashLiteral:
+		return evalHashLiteral(node, env)
 	}
 	return nil
 }
@@ -158,8 +159,11 @@ func evalBlockStatement(node *ast.BlockStatement, env *object.Environment) objec
 
 	for _, statement := range node.Statements {
 		result = Eval(statement, env)
-		if result.Type() == object.RETURN_VALUE_OBJ || result.Type() == object.ERROR_OBJ {
-			return result
+		if result != nil {
+			rt := result.Type()
+			if rt == object.RETURN_VALUE_OBJ || rt == object.ERROR_OBJ {
+				return result
+			}
 		}
 	}
 
@@ -180,7 +184,7 @@ func evalPrefixExpression(operator string, right object.Object) object.Object {
 func evalInfixExpression(operator string, left object.Object, right object.Object) object.Object {
 	switch {
 	case left.Type() != right.Type():
-		return newError("type mismatch: %s %s %s", left.Type(), operator, right.Type())
+		return newError("type mismatch: %s %s %s", left.Inspect(), operator, right.Inspect())
 	case left.Type() == object.INTEGER_OBJ && right.Type() == object.INTEGER_OBJ:
 		return evalInfixIntegerExpression(operator, left, right)
 	case left.Type() == object.BOOLEAN_OBJ && right.Type() == object.BOOLEAN_OBJ:
@@ -188,7 +192,7 @@ func evalInfixExpression(operator string, left object.Object, right object.Objec
 	case left.Type() == object.STRING_OBJ && right.Type() == object.STRING_OBJ:
 		return evalInfixStringExpression(operator, left, right)
 	}
-	return newError("type mismatch: %s %s %s", left.Type(), operator, right.Type())
+	return newError("type mismatch: %s %s %s", left.Inspect(), operator, right.Inspect())
 }
 
 func newError(format string, a ...interface{}) *object.Error {
@@ -204,7 +208,7 @@ func evalInfixBooleanExpression(operator string, left object.Object, right objec
 	case "!=":
 		return &object.Boolean{Value: leftVal != rightVal}
 	default:
-		return newError("unknown operator: %s %s %s", left.Type(), operator, right.Type())
+		return newError("unknown operator: %s %s %s", left.Inspect(), operator, right.Inspect())
 	}
 }
 
@@ -313,4 +317,61 @@ func unwrapReturnValue(obj object.Object) object.Object {
 		return returnValue.Value
 	}
 	return obj
+}
+
+func evalIndexExpression(left, index object.Object) object.Object {
+	switch {
+	case left.Type() == object.ARRAY_OBJ && index.Type() == object.INTEGER_OBJ:
+		return evalArrayIndexExpression(left, index)
+	case left.Type() == object.HASH_OBJ:
+		return evalHashIndexExpression(left, index)
+	default:
+		return newError("index operator not supported: %s", left.Type())
+	}
+}
+
+func evalArrayIndexExpression(array, index object.Object) object.Object {
+	arrayObject := array.(*object.Array)
+	idx := index.(*object.Integer).Value
+	max := int64(len(arrayObject.Items) - 1)
+
+	if idx < 0 || idx > max {
+		return NULL
+	}
+
+	return arrayObject.Items[idx]
+}
+
+func evalHashIndexExpression(hash object.Object, key object.Object) object.Object {
+	hashObject := hash.(*object.Hash)
+	hashableKey, ok := key.(object.Hashable)
+	if !ok {
+		return newError("unusable as hash key: %s", key.Type())
+	}
+	pair, ok := hashObject.Pairs[hashableKey.HashKey()]
+	if !ok {
+		return NULL
+	}
+	return pair.Value
+}
+
+func evalHashLiteral(hl *ast.HashLiteral, env *object.Environment) object.Object {
+	pairs := make(map[object.HashKey]object.HashPair)
+	for k, v := range hl.Pairs {
+		key := Eval(k, env)
+		if isError(key) {
+			return key
+		}
+		hashableKey, ok := key.(object.Hashable)
+		if !ok {
+			return newError("key for hash does is not hashable")
+		}
+		value := Eval(v, env)
+		if isError(value) {
+			return value
+		}
+		pairs[hashableKey.HashKey()] = object.HashPair{Key: key, Value: value}
+	}
+
+	return &object.Hash{Pairs: pairs}
 }

@@ -29,7 +29,16 @@ func TestNextToken(t *testing.T) {
 	--y;
 	"foobar"
 	"foo bar"
-	[1,2]`
+	[1,2]
+	{"foo":"bar"}
+	true && false
+	false || false
+	x += 1
+	x -= 1
+	y *= 2
+	z /= 10
+	x &= false
+	x |= true`
 
 	tests := []struct {
 		expectedType    token.TokenType
@@ -116,6 +125,35 @@ func TestNextToken(t *testing.T) {
 		{token.COMMA, ","},
 		{token.INT, "2"},
 		{token.RBRACKET, "]"},
+		{token.LBRACE, "{"},
+		{token.STRING, "foo"},
+		{token.COLON, ":"},
+		{token.STRING, "bar"},
+		{token.RBRACE, "}"},
+		{token.TRUE, "true"},
+		{token.AND, "&&"},
+		{token.FALSE, "false"},
+		{token.FALSE, "false"},
+		{token.OR, "||"},
+		{token.FALSE, "false"},
+		{token.IDENT, "x"},
+		{token.ASSIGNPLUS, "+="},
+		{token.INT, "1"},
+		{token.IDENT, "x"},
+		{token.ASSIGNMINUS, "-="},
+		{token.INT, "1"},
+		{token.IDENT, "y"},
+		{token.ASSIGNTIMES, "*="},
+		{token.INT, "2"},
+		{token.IDENT, "z"},
+		{token.ASSIGNSLASH, "/="},
+		{token.INT, "10"},
+		{token.IDENT, "x"},
+		{token.ASSIGNAND, "&="},
+		{token.FALSE, "false"},
+		{token.IDENT, "x"},
+		{token.ASSIGNOR, "|="},
+		{token.TRUE, "true"},
 		{token.EOF, ""},
 	}
 
