@@ -184,7 +184,7 @@ func evalPrefixExpression(operator string, right object.Object) object.Object {
 func evalInfixExpression(operator string, left object.Object, right object.Object) object.Object {
 	switch {
 	case left.Type() != right.Type():
-		return newError("type mismatch: %s %s %s", left.Inspect(), operator, right.Inspect())
+		return newError("type mismatch: %s %s %s", left.Type(), operator, right.Type())
 	case left.Type() == object.INTEGER_OBJ && right.Type() == object.INTEGER_OBJ:
 		return evalInfixIntegerExpression(operator, left, right)
 	case left.Type() == object.BOOLEAN_OBJ && right.Type() == object.BOOLEAN_OBJ:
@@ -192,7 +192,7 @@ func evalInfixExpression(operator string, left object.Object, right object.Objec
 	case left.Type() == object.STRING_OBJ && right.Type() == object.STRING_OBJ:
 		return evalInfixStringExpression(operator, left, right)
 	}
-	return newError("type mismatch: %s %s %s", left.Inspect(), operator, right.Inspect())
+	return newError("type mismatch: %s %s %s", left.Type(), operator, right.Type())
 }
 
 func newError(format string, a ...interface{}) *object.Error {
@@ -208,7 +208,7 @@ func evalInfixBooleanExpression(operator string, left object.Object, right objec
 	case "!=":
 		return &object.Boolean{Value: leftVal != rightVal}
 	default:
-		return newError("unknown operator: %s %s %s", left.Inspect(), operator, right.Inspect())
+		return newError("unknown operator: %s %s %s", left.Type(), operator, right.Type())
 	}
 }
 
@@ -295,8 +295,7 @@ func applyFunction(function object.Object, args []object.Object, env *object.Env
 	case *object.Function:
 		extendedEnv := extendEnvironment(args, fn)
 		evaluated := Eval(fn.Body, extendedEnv)
-		ret := unwrapReturnValue(evaluated)
-		return ret
+		return unwrapReturnValue(evaluated)
 	case *object.Builtin:
 		return fn.Fn(args...)
 	default:

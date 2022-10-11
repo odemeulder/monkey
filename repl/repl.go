@@ -6,17 +6,19 @@ import (
 	"io"
 	"os"
 
+	"demeulder.us/monkey/compiler"
 	"demeulder.us/monkey/evaluator"
 	"demeulder.us/monkey/lexer"
 	"demeulder.us/monkey/object"
 	"demeulder.us/monkey/parser"
+	"demeulder.us/monkey/vm"
 )
 
 const PROMPT = ">>"
 
 func Start(in io.Reader, out io.Writer) {
 	scanner := bufio.NewScanner(in)
-	environment := object.NewEnvironment(nil)
+	// environment := object.NewEnvironment(nil)
 
 	for {
 		fmt.Fprintf(out, PROMPT)
@@ -36,11 +38,30 @@ func Start(in io.Reader, out io.Writer) {
 
 		io.WriteString(out, fmt.Sprintf("%s\n", program.String()))
 
-		evaluated := evaluator.Eval(program, environment)
-		if evaluated != nil {
-			io.WriteString(out, evaluated.Inspect())
-			io.WriteString(out, "\n")
+		// evaluated := evaluator.Eval(program, environment)
+		// if evaluated != nil {
+		// 	io.WriteString(out, evaluated.Inspect())
+		// 	io.WriteString(out, "\n")
+		// }
+
+		comp := compiler.New()
+		err := comp.Compile(program)
+		if err != nil {
+			fmt.Fprintf(out, "Woops! Compilation failed:\n %s\n", err)
+			continue
 		}
+
+		machine := vm.New(comp.Bytecode())
+		err = machine.Run()
+		if err != nil {
+			fmt.Fprintf(out, "Woops! Executing bytecode failed:\n %s\n", err)
+			continue
+		}
+
+		lastPopped := machine.LastPoppedStackElement()
+		io.WriteString(out, lastPopped.Inspect())
+		io.WriteString(out, "\n")
+
 	}
 }
 
