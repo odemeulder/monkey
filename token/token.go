@@ -51,6 +51,7 @@ const (
 	ASSIGNSLASH = "/="
 	ASSIGNAND   = "&="
 	ASSIGNOR    = "|="
+	FOR         = "FOR"
 )
 
 var keywords = map[string]TokenType{
@@ -61,6 +62,7 @@ var keywords = map[string]TokenType{
 	"return": RETURN,
 	"if":     IF,
 	"else":   ELSE,
+	"for":    FOR,
 }
 
 func LookupIdent(s string) TokenType {

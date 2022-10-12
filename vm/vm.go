@@ -119,6 +119,25 @@ func (vm *VirtualMachine) Run() error {
 			if err != nil {
 				return err
 			}
+		case code.OpHash:
+			numElements := int(code.ReadUint16(vm.instructions[ip+1:]))
+			ip += 2
+			hash, err := vm.buildHash(vm.sp-numElements, vm.sp)
+			if err != nil {
+				return err
+			}
+			vm.sp = vm.sp - numElements
+			err = vm.push(hash)
+			if err != nil {
+				return err
+			}
+		case code.OpIndex:
+			index := vm.pop()
+			left := vm.pop()
+			err := vm.executeIndexExpression(left, index)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -267,6 +286,57 @@ func (vm *VirtualMachine) buildArray(startIdx int, endIdx int) *object.Array {
 		arr[i-startIdx] = vm.stack[i]
 	}
 	return &object.Array{Items: arr}
+}
+
+func (vm *VirtualMachine) buildHash(startIdx int, endIdx int) (*object.Hash, error) {
+	hash := make(map[object.HashKey]object.HashPair, endIdx-startIdx)
+	for i := startIdx; i < endIdx; i += 2 {
+		key := vm.stack[i]
+		value := vm.stack[i+1]
+		hashPair := object.HashPair{Key: key, Value: value}
+		hashKey, ok := key.(object.Hashable)
+		if !ok {
+			return nil, fmt.Errorf("unusuable as a hash key: %s", key)
+		}
+		hash[hashKey.HashKey()] = hashPair
+	}
+	return &object.Hash{Pairs: hash}, nil
+}
+
+func (vm *VirtualMachine) executeIndexExpression(left, index object.Object) error {
+	switch left.Type() {
+	case object.ARRAY_OBJ:
+		if index.Type() != object.INTEGER_OBJ {
+			return fmt.Errorf("array index must be integer")
+		}
+		return vm.executeArrayIndexExpression(left.(*object.Array), index.(*object.Integer))
+	case object.HASH_OBJ:
+		hashable, ok := index.(object.Hashable)
+		if !ok {
+			return fmt.Errorf("hash index must be hashable")
+		}
+
+		return vm.executeHashIndexExpression(left.(*object.Hash), hashable)
+	default:
+		return fmt.Errorf("invalid index expression")
+	}
+}
+
+func (vm *VirtualMachine) executeArrayIndexExpression(arr *object.Array, index *object.Integer) error {
+	i := index.Value
+	max := int64(len(arr.Items) - 1)
+	if i < 0 || i > max {
+		return vm.push(Null)
+	}
+	return vm.push(arr.Items[i])
+}
+
+func (vm *VirtualMachine) executeHashIndexExpression(hash *object.Hash, key object.Hashable) error {
+	pair, ok := hash.Pairs[key.HashKey()]
+	if !ok {
+		return vm.push(Null)
+	}
+	return vm.push(pair.Value)
 }
 
 func (vm *VirtualMachine) push(obj object.Object) error {

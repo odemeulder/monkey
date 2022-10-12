@@ -300,6 +300,36 @@ func (hl *HashLiteral) String() string {
 	return out.String()
 }
 
+type ForLoop struct {
+	Token          token.Token
+	Initialization Statement
+	Test           Expression
+	Update         Statement
+	Block          *BlockStatement
+}
+
+func (fl *ForLoop) expressionNode()      {}
+func (fl *ForLoop) TokenLiteral() string { return fl.Token.Literal }
+func (fl *ForLoop) String() string {
+	var out bytes.Buffer
+
+	out.WriteString("for")
+	out.WriteString("(")
+	out.WriteString(fl.Initialization.String())
+	out.WriteString(";")
+	out.WriteString(fl.Test.String())
+	out.WriteString(";")
+	out.WriteString(fl.Update.String())
+	out.WriteString(")")
+
+	out.WriteString("{")
+	for _, s := range fl.Block.Statements {
+		out.WriteString(s.String())
+	}
+	out.WriteString("}")
+	return out.String()
+}
+
 type Program struct {
 	Statements []Statement
 }

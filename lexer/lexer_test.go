@@ -38,7 +38,12 @@ func TestNextToken(t *testing.T) {
 	y *= 2
 	z /= 10
 	x &= false
-	x |= true`
+	x |= true
+	
+	let x = 0;
+	for (let i = 0; i < 10; i = i + 1) {
+		x = x + i;
+	};`
 
 	tests := []struct {
 		expectedType    token.TokenType
@@ -154,6 +159,37 @@ func TestNextToken(t *testing.T) {
 		{token.IDENT, "x"},
 		{token.ASSIGNOR, "|="},
 		{token.TRUE, "true"},
+		{token.LET, "let"},
+		{token.IDENT, "x"},
+		{token.ASSIGN, "="},
+		{token.INT, "0"},
+		{token.SEMICOLON, ";"},
+		{token.FOR, "for"},
+		{token.LPAREN, "("},
+		{token.LET, "let"},
+		{token.IDENT, "i"},
+		{token.ASSIGN, "="},
+		{token.INT, "0"},
+		{token.SEMICOLON, ";"},
+		{token.IDENT, "i"},
+		{token.LT, "<"},
+		{token.INT, "10"},
+		{token.SEMICOLON, ";"},
+		{token.IDENT, "i"},
+		{token.ASSIGN, "="},
+		{token.IDENT, "i"},
+		{token.PLUS, "+"},
+		{token.INT, "1"},
+		{token.RPAREN, ")"},
+		{token.LBRACE, "{"},
+		{token.IDENT, "x"},
+		{token.ASSIGN, "="},
+		{token.IDENT, "x"},
+		{token.PLUS, "+"},
+		{token.IDENT, "i"},
+		{token.SEMICOLON, ";"},
+		{token.RBRACE, "}"},
+		{token.SEMICOLON, ";"},
 		{token.EOF, ""},
 	}
 

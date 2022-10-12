@@ -519,6 +519,43 @@ func TestIfExpression(t *testing.T) {
 	}
 }
 
+// not ready
+func TestForLoopExpression(t *testing.T) {
+	t.Skip()
+	input := `for (let i = 0; i < 10; i = i + 1; ) { x = x + i; }`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("program.Statements does not contain %d statements. got=%d\n", 1, len(program.Statements))
+	}
+
+	stmt, ok := program.Statements[0].(*ast.ExpressionStatement)
+	if !ok {
+		t.Fatalf("program.Statements[0] is not ast.ExpressionStatement. got=%T", program.Statements[0])
+	}
+
+	exp, ok := stmt.Expression.(*ast.ForLoop)
+	if !ok {
+		t.Fatalf("stmt.Expression is not ast.ForLoop. got=%T", stmt.Expression)
+	}
+	if !testLetStatement(t, exp.Initialization, "i") {
+		return
+	}
+	if !testInfixExpression(t, exp.Test, "i", "<", "10") {
+		return
+	}
+	if !testLetStatement(t, exp.Update, "i") {
+		return
+	}
+	if len(exp.Block.Statements) != 1 {
+		t.Errorf("consequence is not 1 statements. got=%d\n", len(exp.Block.Statements))
+	}
+
+}
+
 func TestIfElseExpression(t *testing.T) {
 	input := `if (x < y) { x } else { y }`
 

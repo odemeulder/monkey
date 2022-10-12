@@ -76,6 +76,7 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerPrefix(token.STRING, p.parseStringLiteral)
 	p.registerPrefix(token.LBRACKET, p.parseArrayLiteral)
 	p.registerPrefix(token.LBRACE, p.parseHashLiteral)
+	p.registerPrefix(token.FOR, p.parseForLoop)
 
 	p.infixParseFns = make(map[token.TokenType]infixParseFn)
 	p.registerInfix(token.PLUS, p.parseInfixExpression)
@@ -303,6 +304,32 @@ func (p *Parser) parseIfExpression() ast.Expression {
 		}
 		expr.Alternative = p.parseBlockStatement()
 	}
+	return expr
+}
+
+// not ready
+func (p *Parser) parseForLoop() ast.Expression {
+	expr := &ast.ForLoop{Token: p.currToken}
+	if !p.expectPeek(token.LPAREN) {
+		return nil
+	}
+	p.nextToken()
+	expr.Initialization = p.parseLetStatement()
+	// if !p.expectPeek(token.SEMICOLON) {
+	// 	return nil
+	// }
+	expr.Test = p.parseExpression(LOWEST)
+	// if !p.expectPeek(token.SEMICOLON) {
+	// 	return nil
+	// }
+	expr.Update = p.parseLetStatement()
+	if !p.expectPeek(token.RPAREN) {
+		return nil
+	}
+	if !p.expectPeek(token.LBRACE) {
+		return nil
+	}
+	expr.Block = p.parseBlockStatement()
 	return expr
 }
 
