@@ -9,16 +9,19 @@ import (
 )
 
 const StackSize = 2048
+const GlobalsSize = 65536
 
 var True = &object.Boolean{Value: true}
 var False = &object.Boolean{Value: false}
+var Null = &object.Null{}
 
 type VirtualMachine struct {
 	instructions code.Instructions
 	constants    []object.Object
 
-	stack []object.Object
-	sp    int // always point to the next element in the stack, top of the stack is stack[sp-1]
+	stack   []object.Object
+	sp      int // always point to the next element in the stack, top of the stack is stack[sp-1]
+	globals []object.Object
 }
 
 func New(bc *compiler.Bytecode) *VirtualMachine {
@@ -28,7 +31,15 @@ func New(bc *compiler.Bytecode) *VirtualMachine {
 
 		stack: make([]object.Object, StackSize),
 		sp:    0,
+
+		globals: make([]object.Object, GlobalsSize),
 	}
+}
+
+func NewWithGlobalsStore(bytecode *compiler.Bytecode, s []object.Object) *VirtualMachine {
+	vm := New(bytecode)
+	vm.globals = s
+	return vm
 }
 
 func (vm *VirtualMachine) Run() error {
@@ -74,9 +85,54 @@ func (vm *VirtualMachine) Run() error {
 			if err != nil {
 				return err
 			}
+		case code.OpJump:
+			ip = int(code.ReadUint16(vm.instructions[ip+1:])) - 1
+		case code.OpJumpNotTruthy:
+			pos := int(code.ReadUint16(vm.instructions[ip+1:])) - 1
+			ip += 2
+			conditionValue := vm.pop()
+			if !isTruthy(conditionValue) {
+				ip = pos
+			}
+		case code.OpNull:
+			err := vm.push(Null)
+			if err != nil {
+				return err
+			}
+		case code.OpSetGlobal:
+			idx := code.ReadUint16(vm.instructions[ip+1:])
+			ip += 2
+			vm.globals[idx] = vm.pop()
+		case code.OpGetGlobal:
+			idx := code.ReadUint16(vm.instructions[ip+1:])
+			ip += 2
+			err := vm.push(vm.globals[idx])
+			if err != nil {
+				return err
+			}
+		case code.OpArray:
+			len := int(code.ReadUint16(vm.instructions[ip+1:]))
+			ip += 2
+			arr := vm.buildArray(vm.sp-len, vm.sp)
+			vm.sp = vm.sp - len
+			err := vm.push(arr)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil
+}
+
+func isTruthy(obj object.Object) bool {
+	switch obj := obj.(type) {
+	case *object.Boolean:
+		return obj.Value
+	case *object.Null:
+		return false
+	default:
+		return true
+	}
 }
 
 func (vm *VirtualMachine) executeBangExpression(op code.Opcode) error {
@@ -84,7 +140,7 @@ func (vm *VirtualMachine) executeBangExpression(op code.Opcode) error {
 	if operand.Type() == object.BOOLEAN_OBJ {
 		return vm.push(&object.Boolean{Value: !operand.(*object.Boolean).Value})
 	} else if operand.Type() == object.NULL_OBJ {
-		return vm.push(&object.Boolean{Value: false})
+		return vm.push(&object.Boolean{Value: true})
 	}
 	return vm.push(&object.Boolean{Value: false})
 }
@@ -104,6 +160,9 @@ func (vm *VirtualMachine) executeBinaryOperation(op code.Opcode) error {
 	rightType := right.Type()
 	if leftType == object.INTEGER_OBJ && rightType == object.INTEGER_OBJ {
 		return vm.executeBinaryIntegerOperation(left, right, op)
+	}
+	if leftType == object.STRING_OBJ && rightType == object.STRING_OBJ {
+		return vm.executeBinaryStringOperation(left, right, op)
 	}
 	if leftType == object.BOOLEAN_OBJ && rightType == object.BOOLEAN_OBJ {
 		return vm.executeBinaryBooleanOperation(left, right, op)
@@ -130,6 +189,20 @@ func (vm *VirtualMachine) executeBinaryIntegerOperation(left, right object.Objec
 	}
 	// fmt.Printf("%d %d %d = %d\n", leftValue, op, rightValue, result)
 	return vm.push(&object.Integer{Value: result})
+}
+
+func (vm *VirtualMachine) executeBinaryStringOperation(left, right object.Object, op code.Opcode) error {
+	leftValue := left.(*object.String).Value
+	rightValue := right.(*object.String).Value
+	var result string
+	switch op {
+	case code.OpAdd:
+		result = leftValue + rightValue
+	default:
+		return fmt.Errorf("Error, unknown operator")
+	}
+	// fmt.Printf("%d %d %d = %d\n", leftValue, op, rightValue, result)
+	return vm.push(&object.String{Value: result})
 }
 
 func (vm *VirtualMachine) executeBinaryBooleanOperation(left, right object.Object, op code.Opcode) error {
@@ -186,6 +259,14 @@ func (vm *VirtualMachine) executeBinaryBooleanComparison(left, right object.Obje
 	}
 	// return fmt.Errorf("Error, unknown operator")
 	return vm.push(&object.Boolean{Value: result})
+}
+
+func (vm *VirtualMachine) buildArray(startIdx int, endIdx int) *object.Array {
+	arr := make([]object.Object, endIdx-startIdx)
+	for i := startIdx; i < endIdx; i++ {
+		arr[i-startIdx] = vm.stack[i]
+	}
+	return &object.Array{Items: arr}
 }
 
 func (vm *VirtualMachine) push(obj object.Object) error {
