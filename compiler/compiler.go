@@ -11,24 +11,37 @@ import (
 )
 
 type Compiler struct {
+	// instructions code.Instructions
+	constants []object.Object
+
+	// lastInstruction EmittedInstruction
+	// prevInstruction EmittedInstruction
+
+	symbolTable *SymbolTable
+
+	scopes     []CompilationScope
+	scopeIndex int
+}
+
+type CompilationScope struct {
 	instructions code.Instructions
-	constants    []object.Object
 
 	lastInstruction EmittedInstruction
 	prevInstruction EmittedInstruction
-
-	symbolTable *SymbolTable
 }
 
 func New() *Compiler {
-	return &Compiler{
-		instructions: code.Instructions{},
-		constants:    []object.Object{},
-
+	mainScope := CompilationScope{
+		instructions:    code.Instructions{},
 		lastInstruction: EmittedInstruction{},
 		prevInstruction: EmittedInstruction{},
+	}
+	return &Compiler{
+		constants: []object.Object{},
 
 		symbolTable: NewSymbolTable(),
+		scopes:      []CompilationScope{mainScope},
+		scopeIndex:  0,
 	}
 }
 
@@ -132,13 +145,13 @@ func (c *Compiler) Compile(node ast.Node) error {
 			return err
 		}
 
-		if c.lastInstructionIsPop() {
+		if c.lastInstructionIs(code.OpPop) {
 			c.removeLastPop()
 		}
 
 		jumpPos := c.emit(code.OpJump, 9999)
 
-		afterConsequencePos := len(c.instructions)
+		afterConsequencePos := len(c.currentInstructions())
 		newInstruction := code.Make(code.OpJumpNotTruthy, afterConsequencePos)
 		c.replaceInstruction(jumpNotTruthyPos, newInstruction)
 
@@ -149,11 +162,11 @@ func (c *Compiler) Compile(node ast.Node) error {
 			if err != nil {
 				return err
 			}
-			if c.lastInstructionIsPop() {
+			if c.lastInstructionIs(code.OpPop) {
 				c.removeLastPop()
 			}
 		}
-		afterAlternativePos := len(c.instructions)
+		afterAlternativePos := len(c.currentInstructions())
 		newInstruction = code.Make(code.OpJump, afterAlternativePos)
 		c.replaceInstruction(jumpPos, newInstruction)
 
@@ -212,6 +225,33 @@ func (c *Compiler) Compile(node ast.Node) error {
 			return err
 		}
 		c.emit(code.OpIndex)
+	case *ast.FunctionLiteral:
+		c.enterScope()
+		err := c.Compile(node.Body)
+		if err != nil {
+			return err
+		}
+		if c.lastInstructionIs(code.OpPop) {
+			c.replaceLastPopWithReturn()
+		}
+		if !c.lastInstructionIs(code.OpReturnValue) {
+			c.emit(code.OpReturn)
+		}
+		instructions := c.leaveScope()
+		addr := c.addConstant(&object.CompiledFunction{Instructions: instructions})
+		c.emit(code.OpConstant, addr)
+	case *ast.ReturnStatement:
+		err := c.Compile(node.ReturnValue)
+		if err != nil {
+			return err
+		}
+		c.emit(code.OpReturnValue)
+	case *ast.CallExpression:
+		err := c.Compile(node.Function)
+		if err != nil {
+			return err
+		}
+		c.emit(code.OpCall)
 	}
 	return nil
 }
@@ -223,7 +263,7 @@ type Bytecode struct {
 
 func (c *Compiler) Bytecode() *Bytecode {
 	return &Bytecode{
-		Instructions: c.instructions,
+		Instructions: c.currentInstructions(),
 		Constants:    c.constants,
 	}
 }
@@ -235,31 +275,70 @@ func (c *Compiler) addConstant(obj object.Object) int {
 
 func (c *Compiler) emit(op code.Opcode, operands ...int) int {
 	ins := code.Make(op, operands...)
-	posNewInstruction := len(c.instructions)
-	c.instructions = append(c.instructions, ins...)
+	posNewInstruction := len(c.currentInstructions())
+	updatedInstructions := append(c.currentInstructions(), ins...)
+	c.scopes[c.scopeIndex].instructions = updatedInstructions
 	c.setLastInstruction(op, posNewInstruction)
 	return posNewInstruction
 }
 
 func (c *Compiler) setLastInstruction(op code.Opcode, pos int) {
-	prev := c.lastInstruction
+	prev := c.scopes[c.scopeIndex].lastInstruction
 	last := EmittedInstruction{Opcode: op, Position: pos}
 
-	c.lastInstruction = last
-	c.prevInstruction = prev
+	c.scopes[c.scopeIndex].lastInstruction = last
+	c.scopes[c.scopeIndex].prevInstruction = prev
 }
 
-func (c *Compiler) lastInstructionIsPop() bool {
-	return c.lastInstruction.Opcode == code.OpPop
+func (c *Compiler) lastInstructionIs(op code.Opcode) bool {
+	if (len(c.currentInstructions())) == 0 {
+		return false
+	}
+	return c.scopes[c.scopeIndex].lastInstruction.Opcode == op
 }
 
 func (c *Compiler) removeLastPop() {
-	c.instructions = c.instructions[:c.lastInstruction.Position]
-	c.lastInstruction = c.prevInstruction
+	last := c.scopes[c.scopeIndex].lastInstruction
+	previous := c.scopes[c.scopeIndex].prevInstruction
+
+	old := c.currentInstructions()
+	new := old[:last.Position]
+
+	c.scopes[c.scopeIndex].instructions = new
+	c.scopes[c.scopeIndex].lastInstruction = previous
 }
 
 func (c *Compiler) replaceInstruction(pos int, newInstr []byte) {
+	ins := c.currentInstructions()
+
 	for i := 0; i < len(newInstr); i++ {
-		c.instructions[pos+i] = newInstr[i]
+		ins[pos+i] = newInstr[i]
 	}
+}
+
+func (c *Compiler) enterScope() {
+	newScope := CompilationScope{
+		instructions:    code.Instructions{},
+		lastInstruction: EmittedInstruction{},
+		prevInstruction: EmittedInstruction{},
+	}
+	c.scopes = append(c.scopes, newScope)
+	c.scopeIndex++
+}
+
+func (c *Compiler) leaveScope() code.Instructions {
+	instructions := c.currentInstructions()
+	c.scopes = c.scopes[:len(c.scopes)-1]
+	c.scopeIndex--
+	return instructions
+}
+
+func (c *Compiler) currentInstructions() code.Instructions {
+	return c.scopes[c.scopeIndex].instructions
+}
+
+func (c *Compiler) replaceLastPopWithReturn() {
+	lastPos := c.scopes[c.scopeIndex].lastInstruction.Position
+	c.replaceInstruction(lastPos, code.Make(code.OpReturnValue))
+	c.scopes[c.scopeIndex].lastInstruction.Opcode = code.OpReturnValue
 }
