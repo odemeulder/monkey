@@ -10,14 +10,17 @@ import (
 
 const StackSize = 2048
 const GlobalsSize = 65536
+const MaxFrames = 1025
 
 var True = &object.Boolean{Value: true}
 var False = &object.Boolean{Value: false}
 var Null = &object.Null{}
 
 type VirtualMachine struct {
-	instructions code.Instructions
-	constants    []object.Object
+	constants []object.Object
+
+	frames      []*Frame
+	framesIndex int
 
 	stack   []object.Object
 	sp      int // always point to the next element in the stack, top of the stack is stack[sp-1]
@@ -25,14 +28,20 @@ type VirtualMachine struct {
 }
 
 func New(bc *compiler.Bytecode) *VirtualMachine {
+	mainFn := &object.CompiledFunction{Instructions: bc.Instructions}
+	mainFrame := NewFrame(mainFn)
+	frames := make([]*Frame, MaxFrames)
+	frames[0] = mainFrame
 	return &VirtualMachine{
-		instructions: bc.Instructions,
-		constants:    bc.Constants,
+		constants: bc.Constants,
 
 		stack: make([]object.Object, StackSize),
 		sp:    0,
 
 		globals: make([]object.Object, GlobalsSize),
+
+		frames:      frames,
+		framesIndex: 1,
 	}
 }
 
@@ -43,8 +52,18 @@ func NewWithGlobalsStore(bytecode *compiler.Bytecode, s []object.Object) *Virtua
 }
 
 func (vm *VirtualMachine) Run() error {
-	for ip := 0; ip < len(vm.instructions); ip++ {
-		op := code.Opcode(vm.instructions[ip])
+
+	var ip int
+	var ins code.Instructions
+	var op code.Opcode
+
+	for vm.currentFrame().ip < len(vm.currentFrame().Instructions())-1 {
+		vm.currentFrame().ip++
+
+		ip = vm.currentFrame().ip
+		ins = vm.currentFrame().Instructions()
+		op = code.Opcode(ins[ip])
+
 		switch op {
 		case code.OpAdd, code.OpSub, code.OpMul, code.OpDiv:
 			err := vm.executeBinaryOperation(op)
@@ -67,8 +86,9 @@ func (vm *VirtualMachine) Run() error {
 				return err
 			}
 		case code.OpConstant:
-			constindex := code.ReadUint16(vm.instructions[ip+1:])
-			ip += 2
+			constindex := code.ReadUint16(ins[ip+1:])
+			fmt.Printf("constindex: %d\n", constindex)
+			vm.currentFrame().ip += 2
 			err := vm.push(vm.constants[constindex])
 			if err != nil {
 				return err
@@ -86,13 +106,14 @@ func (vm *VirtualMachine) Run() error {
 				return err
 			}
 		case code.OpJump:
-			ip = int(code.ReadUint16(vm.instructions[ip+1:])) - 1
+			pos := int(code.ReadUint16(ins[ip+1:]))
+			vm.currentFrame().ip = pos - 1
 		case code.OpJumpNotTruthy:
-			pos := int(code.ReadUint16(vm.instructions[ip+1:])) - 1
-			ip += 2
+			pos := int(code.ReadUint16(ins[ip+1:]))
+			vm.currentFrame().ip += 2
 			conditionValue := vm.pop()
 			if !isTruthy(conditionValue) {
-				ip = pos
+				vm.currentFrame().ip = pos - 1
 			}
 		case code.OpNull:
 			err := vm.push(Null)
@@ -100,19 +121,19 @@ func (vm *VirtualMachine) Run() error {
 				return err
 			}
 		case code.OpSetGlobal:
-			idx := code.ReadUint16(vm.instructions[ip+1:])
-			ip += 2
+			idx := code.ReadUint16(ins[ip+1:])
+			vm.currentFrame().ip += 2
 			vm.globals[idx] = vm.pop()
 		case code.OpGetGlobal:
-			idx := code.ReadUint16(vm.instructions[ip+1:])
-			ip += 2
+			idx := code.ReadUint16(ins[ip+1:])
+			vm.currentFrame().ip += 2
 			err := vm.push(vm.globals[idx])
 			if err != nil {
 				return err
 			}
 		case code.OpArray:
-			len := int(code.ReadUint16(vm.instructions[ip+1:]))
-			ip += 2
+			len := int(code.ReadUint16(ins[ip+1:]))
+			vm.currentFrame().ip += 2
 			arr := vm.buildArray(vm.sp-len, vm.sp)
 			vm.sp = vm.sp - len
 			err := vm.push(arr)
@@ -120,8 +141,8 @@ func (vm *VirtualMachine) Run() error {
 				return err
 			}
 		case code.OpHash:
-			numElements := int(code.ReadUint16(vm.instructions[ip+1:]))
-			ip += 2
+			numElements := int(code.ReadUint16(ins[ip+1:]))
+			vm.currentFrame().ip += 2
 			hash, err := vm.buildHash(vm.sp-numElements, vm.sp)
 			if err != nil {
 				return err
@@ -363,4 +384,18 @@ func (vm *VirtualMachine) StackTop() object.Object {
 		return nil
 	}
 	return vm.stack[vm.sp-1]
+}
+
+func (vm *VirtualMachine) currentFrame() *Frame {
+	return vm.frames[vm.framesIndex-1]
+}
+
+func (vm *VirtualMachine) pushFrame(f *Frame) {
+	vm.frames[vm.framesIndex] = f
+	vm.framesIndex++
+}
+
+func (vm *VirtualMachine) popFrame() *Frame {
+	vm.framesIndex--
+	return vm.frames[vm.framesIndex]
 }
