@@ -29,7 +29,7 @@ type VirtualMachine struct {
 
 func New(bc *compiler.Bytecode) *VirtualMachine {
 	mainFn := &object.CompiledFunction{Instructions: bc.Instructions}
-	mainFrame := NewFrame(mainFn)
+	mainFrame := NewFrame(mainFn, 0)
 	frames := make([]*Frame, MaxFrames)
 	frames[0] = mainFrame
 	return &VirtualMachine{
@@ -131,6 +131,19 @@ func (vm *VirtualMachine) Run() error {
 			if err != nil {
 				return err
 			}
+		case code.OpSetLocal:
+			idx := code.ReadUint8(ins[ip+1:])
+			vm.currentFrame().ip += 1
+			frame := vm.currentFrame()
+			vm.stack[frame.BasePointer+int(idx)] = vm.pop()
+		case code.OpGetLocal:
+			idx := code.ReadUint8(ins[ip+1:])
+			vm.currentFrame().ip += 1
+			frame := vm.currentFrame()
+			err := vm.push(vm.stack[frame.BasePointer+int(idx)])
+			if err != nil {
+				return err
+			}
 		case code.OpArray:
 			len := int(code.ReadUint16(ins[ip+1:]))
 			vm.currentFrame().ip += 2
@@ -164,19 +177,20 @@ func (vm *VirtualMachine) Run() error {
 			if !ok {
 				return fmt.Errorf("calling non-function")
 			}
-			frame := NewFrame(fn)
+			frame := NewFrame(fn, vm.sp)
 			vm.pushFrame(frame)
+			vm.sp = frame.BasePointer + fn.NumLocals
 		case code.OpReturnValue:
 			returnValue := vm.pop()
-			vm.popFrame()
-			vm.pop()
+			frame := vm.popFrame()
+			vm.sp = frame.BasePointer - 1
 			err := vm.push(returnValue)
 			if err != nil {
 				return err
 			}
 		case code.OpReturn:
-			vm.popFrame()
-			vm.pop()
+			frame := vm.popFrame()
+			vm.sp = frame.BasePointer - 1
 			err := vm.push(Null)
 			if err != nil {
 				return err
