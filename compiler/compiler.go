@@ -11,21 +11,14 @@ import (
 )
 
 type Compiler struct {
-	// instructions code.Instructions
-	constants []object.Object
-
-	// lastInstruction EmittedInstruction
-	// prevInstruction EmittedInstruction
-
+	constants   []object.Object
 	symbolTable *SymbolTable
-
-	scopes     []CompilationScope
-	scopeIndex int
+	scopes      []CompilationScope
+	scopeIndex  int
 }
 
 type CompilationScope struct {
-	instructions code.Instructions
-
+	instructions    code.Instructions
 	lastInstruction EmittedInstruction
 	prevInstruction EmittedInstruction
 }
@@ -37,8 +30,7 @@ func New() *Compiler {
 		prevInstruction: EmittedInstruction{},
 	}
 	return &Compiler{
-		constants: []object.Object{},
-
+		constants:   []object.Object{},
 		symbolTable: NewSymbolTable(),
 		scopes:      []CompilationScope{mainScope},
 		scopeIndex:  0,
@@ -60,6 +52,7 @@ type EmittedInstruction struct {
 func (c *Compiler) Compile(node ast.Node) error {
 
 	switch node := node.(type) {
+
 	case *ast.Program:
 		for _, s := range node.Statements {
 			err := c.Compile(s)
@@ -67,12 +60,14 @@ func (c *Compiler) Compile(node ast.Node) error {
 				return err
 			}
 		}
+
 	case *ast.ExpressionStatement:
 		err := c.Compile(node.Expression)
 		if err != nil {
 			return err
 		}
 		c.emit(code.OpPop)
+
 	case *ast.InfixExpression:
 		err := c.Compile(node.Left)
 		if err != nil {
@@ -106,20 +101,24 @@ func (c *Compiler) Compile(node ast.Node) error {
 		default:
 			return fmt.Errorf("unknwown operator %s", node.Operator)
 		}
+
 	case *ast.IntegerLiteral:
 		integer := &object.Integer{Value: node.Value}
 		addr := c.addConstant(integer)
 		c.emit(code.OpConstant, addr)
+
 	case *ast.Boolean:
 		if node.Value {
 			c.emit(code.OpTrue)
 		} else {
 			c.emit(code.OpFalse)
 		}
+
 	case *ast.StringLiteral:
 		s := &object.String{Value: node.Value}
 		addr := c.addConstant(s)
 		c.emit(code.OpConstant, addr)
+
 	case *ast.PrefixExpression:
 		err := c.Compile(node.Right)
 		if err != nil {
@@ -133,6 +132,7 @@ func (c *Compiler) Compile(node ast.Node) error {
 		default:
 			return fmt.Errorf("unknwown prefix operator %s", node.Operator)
 		}
+
 	case *ast.IfExpression:
 		err := c.Compile(node.Condition)
 		if err != nil {
@@ -177,6 +177,7 @@ func (c *Compiler) Compile(node ast.Node) error {
 				return err
 			}
 		}
+
 	case *ast.LetStatement:
 		err := c.Compile(node.Value)
 		if err != nil {
@@ -188,6 +189,7 @@ func (c *Compiler) Compile(node ast.Node) error {
 		} else {
 			c.emit(code.OpSetGlobal, symbol.Index)
 		}
+
 	case *ast.Identifier:
 		symbol, ok := c.symbolTable.Resolve(node.Value)
 		if !ok {
@@ -198,6 +200,7 @@ func (c *Compiler) Compile(node ast.Node) error {
 		} else {
 			c.emit(code.OpGetLocal, symbol.Index)
 		}
+
 	case *ast.ArrayLiteral:
 		for _, e := range node.Items {
 			err := c.Compile(e)
@@ -206,6 +209,7 @@ func (c *Compiler) Compile(node ast.Node) error {
 			}
 		}
 		c.emit(code.OpArray, len(node.Items))
+
 	case *ast.HashLiteral:
 		keys := []ast.Expression{}
 		for k := range node.Pairs {
@@ -223,6 +227,7 @@ func (c *Compiler) Compile(node ast.Node) error {
 			}
 		}
 		c.emit(code.OpHash, len(node.Pairs)*2)
+
 	case *ast.IndexExpression:
 		err := c.Compile(node.Left)
 		if err != nil {
@@ -233,8 +238,12 @@ func (c *Compiler) Compile(node ast.Node) error {
 			return err
 		}
 		c.emit(code.OpIndex)
+
 	case *ast.FunctionLiteral:
 		c.enterScope()
+		for _, param := range node.Parameters {
+			c.symbolTable.Define(param.Value)
+		}
 		err := c.Compile(node.Body)
 		if err != nil {
 			return err
@@ -247,21 +256,34 @@ func (c *Compiler) Compile(node ast.Node) error {
 		}
 		numLocals := c.symbolTable.numDefinitions
 		instructions := c.leaveScope()
-		cf := &object.CompiledFunction{Instructions: instructions, NumLocals: numLocals}
+		cf := &object.CompiledFunction{
+			Instructions:  instructions,
+			NumLocals:     numLocals,
+			NumParameters: len(node.Parameters),
+		}
 		addr := c.addConstant(cf)
 		c.emit(code.OpConstant, addr)
+
 	case *ast.ReturnStatement:
 		err := c.Compile(node.ReturnValue)
 		if err != nil {
 			return err
 		}
 		c.emit(code.OpReturnValue)
+
 	case *ast.CallExpression:
 		err := c.Compile(node.Function)
 		if err != nil {
 			return err
 		}
-		c.emit(code.OpCall)
+		for _, arg := range node.Arguments {
+			err := c.Compile(arg)
+			if err != nil {
+				return err
+			}
+		}
+		c.emit(code.OpCall, len(node.Arguments))
+
 	}
 	return nil
 }

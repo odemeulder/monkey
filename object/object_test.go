@@ -9,15 +9,15 @@ func TestStringHashKey(t *testing.T) {
 	diff2 := &String{Value: "Hello Heaven"}
 
 	if hello1.HashKey() != hello2.HashKey() {
-		t.Errorf("strings with the same contect should have the same hash key")
+		t.Errorf("strings with the same context should have the same hash key")
 	}
 
 	if diff1.HashKey() != diff2.HashKey() {
-		t.Errorf("strings with the same contect should have the same hash key")
+		t.Errorf("strings with the same context should have the same hash key")
 	}
 
-	if hello1.HashKey() != diff1.HashKey() {
-		t.Errorf("strings with the different contect should not have the same hash key")
+	if hello1.HashKey() == diff1.HashKey() {
+		t.Errorf("strings with the different context should not have the same hash key")
 	}
 
 }

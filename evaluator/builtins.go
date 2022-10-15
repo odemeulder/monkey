@@ -7,7 +7,7 @@ import (
 )
 
 var builtins = map[string]*object.Builtin{
-	"len":   &object.Builtin{Fn: builtinLen},
+	"len":   object.GetBuiltinByName("len"),
 	"first": &object.Builtin{Fn: builtinFirst},
 	"last":  &object.Builtin{Fn: builtinLast},
 	"rest":  &object.Builtin{Fn: builtinRest},

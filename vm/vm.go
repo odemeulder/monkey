@@ -87,7 +87,6 @@ func (vm *VirtualMachine) Run() error {
 			}
 		case code.OpConstant:
 			constindex := code.ReadUint16(ins[ip+1:])
-			fmt.Printf("constindex: %d\n", constindex)
 			vm.currentFrame().ip += 2
 			err := vm.push(vm.constants[constindex])
 			if err != nil {
@@ -173,13 +172,12 @@ func (vm *VirtualMachine) Run() error {
 				return err
 			}
 		case code.OpCall:
-			fn, ok := vm.stack[vm.sp-1].(*object.CompiledFunction)
-			if !ok {
-				return fmt.Errorf("calling non-function")
+			numArgs := int(code.ReadUint8(ins[ip+1:]))
+			vm.currentFrame().ip += 1
+			err := vm.callFunction(numArgs)
+			if err != nil {
+				return err
 			}
-			frame := NewFrame(fn, vm.sp)
-			vm.pushFrame(frame)
-			vm.sp = frame.BasePointer + fn.NumLocals
 		case code.OpReturnValue:
 			returnValue := vm.pop()
 			frame := vm.popFrame()
@@ -209,6 +207,20 @@ func isTruthy(obj object.Object) bool {
 	default:
 		return true
 	}
+}
+
+func (vm *VirtualMachine) callFunction(numArgs int) error {
+	fn, ok := vm.stack[vm.sp-1-numArgs].(*object.CompiledFunction)
+	if !ok {
+		return fmt.Errorf("calling a non-function")
+	}
+	if fn.NumParameters != numArgs {
+		return fmt.Errorf("wrong number of arguments: want=%d, got=%d", fn.NumParameters, numArgs)
+	}
+	frame := NewFrame(fn, vm.sp-numArgs)
+	vm.pushFrame(frame)
+	vm.sp = frame.BasePointer + fn.NumLocals
+	return nil
 }
 
 func (vm *VirtualMachine) executeBangExpression(op code.Opcode) error {
