@@ -24,6 +24,12 @@ type CompilationScope struct {
 }
 
 func New() *Compiler {
+
+	symbolTable := NewSymbolTable()
+	for i, v := range object.Builtins {
+		symbolTable.DefineBuiltin(i, v.Name)
+	}
+
 	mainScope := CompilationScope{
 		instructions:    code.Instructions{},
 		lastInstruction: EmittedInstruction{},
@@ -31,7 +37,7 @@ func New() *Compiler {
 	}
 	return &Compiler{
 		constants:   []object.Object{},
-		symbolTable: NewSymbolTable(),
+		symbolTable: symbolTable,
 		scopes:      []CompilationScope{mainScope},
 		scopeIndex:  0,
 	}
@@ -184,9 +190,10 @@ func (c *Compiler) Compile(node ast.Node) error {
 			return err
 		}
 		symbol := c.symbolTable.Define(node.Name.Value)
-		if symbol.Scope == LocalScope {
+		switch symbol.Scope {
+		case LocalScope:
 			c.emit(code.OpSetLocal, symbol.Index)
-		} else {
+		case GlobalScope:
 			c.emit(code.OpSetGlobal, symbol.Index)
 		}
 
@@ -195,10 +202,13 @@ func (c *Compiler) Compile(node ast.Node) error {
 		if !ok {
 			return fmt.Errorf("undefined variable %s", node.Value)
 		}
-		if symbol.Scope == GlobalScope {
-			c.emit(code.OpGetGlobal, symbol.Index)
-		} else {
+		switch symbol.Scope {
+		case LocalScope:
 			c.emit(code.OpGetLocal, symbol.Index)
+		case GlobalScope:
+			c.emit(code.OpGetGlobal, symbol.Index)
+		case BuiltinScope:
+			c.emit(code.OpGetBuiltin, symbol.Index)
 		}
 
 	case *ast.ArrayLiteral:

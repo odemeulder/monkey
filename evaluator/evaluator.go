@@ -297,7 +297,10 @@ func applyFunction(function object.Object, args []object.Object, env *object.Env
 		evaluated := Eval(fn.Body, extendedEnv)
 		return unwrapReturnValue(evaluated)
 	case *object.Builtin:
-		return fn.Fn(args...)
+		if result := fn.Fn(args...); result != nil {
+			return result
+		}
+		return NULL
 	default:
 		return newError("not a function: %s\n", fn.Type())
 	}
