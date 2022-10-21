@@ -185,11 +185,11 @@ func (c *Compiler) Compile(node ast.Node) error {
 		}
 
 	case *ast.LetStatement:
+		symbol := c.symbolTable.Define(node.Name.Value)
 		err := c.Compile(node.Value)
 		if err != nil {
 			return err
 		}
-		symbol := c.symbolTable.Define(node.Name.Value)
 		switch symbol.Scope {
 		case LocalScope:
 			c.emit(code.OpSetLocal, symbol.Index)
@@ -202,14 +202,7 @@ func (c *Compiler) Compile(node ast.Node) error {
 		if !ok {
 			return fmt.Errorf("undefined variable %s", node.Value)
 		}
-		switch symbol.Scope {
-		case LocalScope:
-			c.emit(code.OpGetLocal, symbol.Index)
-		case GlobalScope:
-			c.emit(code.OpGetGlobal, symbol.Index)
-		case BuiltinScope:
-			c.emit(code.OpGetBuiltin, symbol.Index)
-		}
+		c.loadSymbol(symbol)
 
 	case *ast.ArrayLiteral:
 		for _, e := range node.Items {
@@ -251,6 +244,9 @@ func (c *Compiler) Compile(node ast.Node) error {
 
 	case *ast.FunctionLiteral:
 		c.enterScope()
+		if node.Name != "" {
+			c.symbolTable.DefineFunctionName(node.Name)
+		}
 		for _, param := range node.Parameters {
 			c.symbolTable.Define(param.Value)
 		}
@@ -264,15 +260,19 @@ func (c *Compiler) Compile(node ast.Node) error {
 		if !c.lastInstructionIs(code.OpReturnValue) {
 			c.emit(code.OpReturn)
 		}
+		freeSymbols := c.symbolTable.FreeSymbols
 		numLocals := c.symbolTable.numDefinitions
 		instructions := c.leaveScope()
+		for _, s := range freeSymbols {
+			c.loadSymbol(s)
+		}
 		cf := &object.CompiledFunction{
 			Instructions:  instructions,
 			NumLocals:     numLocals,
 			NumParameters: len(node.Parameters),
 		}
 		addr := c.addConstant(cf)
-		c.emit(code.OpConstant, addr)
+		c.emit(code.OpClosure, addr, len(freeSymbols))
 
 	case *ast.ReturnStatement:
 		err := c.Compile(node.ReturnValue)
@@ -322,6 +322,21 @@ func (c *Compiler) emit(op code.Opcode, operands ...int) int {
 	c.scopes[c.scopeIndex].instructions = updatedInstructions
 	c.setLastInstruction(op, posNewInstruction)
 	return posNewInstruction
+}
+
+func (c *Compiler) loadSymbol(s Symbol) {
+	switch s.Scope {
+	case GlobalScope:
+		c.emit(code.OpGetGlobal, s.Index)
+	case LocalScope:
+		c.emit(code.OpGetLocal, s.Index)
+	case BuiltinScope:
+		c.emit(code.OpGetBuiltin, s.Index)
+	case FreeScope:
+		c.emit(code.OpGetFree, s.Index)
+	case FunctionScope:
+		c.emit(code.OpCurrentClosure)
+	}
 }
 
 func (c *Compiler) setLastInstruction(op code.Opcode, pos int) {

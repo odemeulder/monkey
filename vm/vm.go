@@ -29,7 +29,8 @@ type VirtualMachine struct {
 
 func New(bc *compiler.Bytecode) *VirtualMachine {
 	mainFn := &object.CompiledFunction{Instructions: bc.Instructions}
-	mainFrame := NewFrame(mainFn, 0)
+	mainClosure := &object.Closure{Fn: mainFn}
+	mainFrame := NewFrame(mainClosure, 0)
 	frames := make([]*Frame, MaxFrames)
 	frames[0] = mainFrame
 	return &VirtualMachine{
@@ -174,8 +175,7 @@ func (vm *VirtualMachine) Run() error {
 		case code.OpCall:
 			numArgs := int(code.ReadUint8(ins[ip+1:]))
 			vm.currentFrame().ip += 1
-			// err := vm.callFunction(numArgs)
-			err := vm.executeFunction(numArgs)
+			err := vm.exectuteCall(numArgs)
 			if err != nil {
 				return err
 			}
@@ -202,6 +202,28 @@ func (vm *VirtualMachine) Run() error {
 			if err != nil {
 				return err
 			}
+		case code.OpClosure:
+			constIndex := code.ReadUint16((ins[ip+1:]))
+			numFree := code.ReadUint8(ins[ip+3:])
+			vm.currentFrame().ip += 3
+			err := vm.pushClosure(int(constIndex), int(numFree))
+			if err != nil {
+				return err
+			}
+		case code.OpGetFree:
+			idx := code.ReadUint8(ins[ip+1:])
+			vm.currentFrame().ip += 1
+			currentClosure := vm.currentFrame().cl
+			err := vm.push(currentClosure.Free[idx])
+			if err != nil {
+				return err
+			}
+		case code.OpCurrentClosure:
+			currentClosure := vm.currentFrame().cl
+			err := vm.push(currentClosure)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -218,10 +240,10 @@ func isTruthy(obj object.Object) bool {
 	}
 }
 
-func (vm *VirtualMachine) executeFunction(numArgs int) error {
+func (vm *VirtualMachine) exectuteCall(numArgs int) error {
 	callee := vm.stack[vm.sp-1-numArgs]
 	switch callee := callee.(type) {
-	case *object.CompiledFunction:
+	case *object.Closure:
 		return vm.callFunction(callee, numArgs)
 	case *object.Builtin:
 		return vm.callBuiltin(callee, numArgs)
@@ -230,14 +252,29 @@ func (vm *VirtualMachine) executeFunction(numArgs int) error {
 	}
 }
 
-func (vm *VirtualMachine) callFunction(fn *object.CompiledFunction, numArgs int) error {
-	if fn.NumParameters != numArgs {
-		return fmt.Errorf("wrong number of arguments: want=%d, got=%d", fn.NumParameters, numArgs)
+func (vm *VirtualMachine) callFunction(cl *object.Closure, numArgs int) error {
+	if cl.Fn.NumParameters != numArgs {
+		return fmt.Errorf("wrong number of arguments: want=%d, got=%d", cl.Fn.NumParameters, numArgs)
 	}
-	frame := NewFrame(fn, vm.sp-numArgs)
+	frame := NewFrame(cl, vm.sp-numArgs)
 	vm.pushFrame(frame)
-	vm.sp = frame.BasePointer + fn.NumLocals
+	vm.sp = frame.BasePointer + cl.Fn.NumLocals
 	return nil
+}
+
+func (vm *VirtualMachine) pushClosure(constIndex int, numFree int) error {
+	constant := vm.constants[constIndex]
+	function, ok := constant.(*object.CompiledFunction)
+	if !ok {
+		return fmt.Errorf("not a function: %+v", constant)
+	}
+	free := make([]object.Object, numFree)
+	for i := 0; i < numFree; i++ {
+		free[i] = vm.stack[vm.sp-numFree+i]
+	}
+	vm.sp = vm.sp - numFree
+	closure := &object.Closure{Fn: function, Free: free}
+	return vm.push(closure)
 }
 
 func (vm *VirtualMachine) callBuiltin(builtin *object.Builtin, numArgs int) error {

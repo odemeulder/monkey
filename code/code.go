@@ -53,6 +53,9 @@ const (
 	OpGetLocal
 
 	OpGetBuiltin
+	OpClosure
+	OpGetFree
+	OpCurrentClosure
 )
 
 type Definition struct {
@@ -61,36 +64,39 @@ type Definition struct {
 }
 
 var definitions = map[Opcode]*Definition{
-	OpConstant:      {Name: "OpConstant", OperandWidths: []int{2}},
-	OpAdd:           {Name: "OpAdd", OperandWidths: []int{}},
-	OpSub:           {Name: "OpSub", OperandWidths: []int{}},
-	OpMul:           {Name: "OpMul", OperandWidths: []int{}},
-	OpDiv:           {Name: "OpDiv", OperandWidths: []int{}},
-	OpEqual:         {Name: "OpEqual", OperandWidths: []int{}},
-	OpNotEqual:      {Name: "OpNotEqual", OperandWidths: []int{}},
-	OpGreater:       {Name: "OpGreater", OperandWidths: []int{}},
-	OpGreatorEqual:  {Name: "OpGreaterEqual", OperandWidths: []int{}},
-	OpLess:          {Name: "OpLess", OperandWidths: []int{}},
-	OpLessEqual:     {Name: "OpLessEqual", OperandWidths: []int{}},
-	OpPop:           {Name: "OpPop", OperandWidths: []int{}},
-	OpTrue:          {Name: "OpTrue", OperandWidths: []int{}},
-	OpFalse:         {Name: "OpFalse", OperandWidths: []int{}},
-	OpMinus:         {Name: "OpMinus", OperandWidths: []int{}},
-	OpBang:          {Name: "OpBang", OperandWidths: []int{}},
-	OpJumpNotTruthy: {Name: "OpJumpNotTruthy", OperandWidths: []int{2}},
-	OpJump:          {Name: "OpJump", OperandWidths: []int{2}},
-	OpNull:          {Name: "OpNull", OperandWidths: []int{}},
-	OpSetGlobal:     {Name: "OpSetGlobal", OperandWidths: []int{2}},
-	OpGetGlobal:     {Name: "OpGetGlobal", OperandWidths: []int{2}},
-	OpArray:         {Name: "OpArray", OperandWidths: []int{2}},
-	OpHash:          {Name: "OpHash", OperandWidths: []int{2}},
-	OpIndex:         {Name: "OpIndex", OperandWidths: []int{}},
-	OpCall:          {Name: "OpCall", OperandWidths: []int{1}},
-	OpReturnValue:   {Name: "OpReturnValue", OperandWidths: []int{}},
-	OpReturn:        {Name: "OpReturn", OperandWidths: []int{}},
-	OpSetLocal:      {Name: "OpSetLocal", OperandWidths: []int{1}},
-	OpGetLocal:      {Name: "OpGetLocal", OperandWidths: []int{1}},
-	OpGetBuiltin:    {Name: "OpGetBuiltin", OperandWidths: []int{1}},
+	OpConstant:       {Name: "OpConstant", OperandWidths: []int{2}},
+	OpAdd:            {Name: "OpAdd", OperandWidths: []int{}},
+	OpSub:            {Name: "OpSub", OperandWidths: []int{}},
+	OpMul:            {Name: "OpMul", OperandWidths: []int{}},
+	OpDiv:            {Name: "OpDiv", OperandWidths: []int{}},
+	OpEqual:          {Name: "OpEqual", OperandWidths: []int{}},
+	OpNotEqual:       {Name: "OpNotEqual", OperandWidths: []int{}},
+	OpGreater:        {Name: "OpGreater", OperandWidths: []int{}},
+	OpGreatorEqual:   {Name: "OpGreaterEqual", OperandWidths: []int{}},
+	OpLess:           {Name: "OpLess", OperandWidths: []int{}},
+	OpLessEqual:      {Name: "OpLessEqual", OperandWidths: []int{}},
+	OpPop:            {Name: "OpPop", OperandWidths: []int{}},
+	OpTrue:           {Name: "OpTrue", OperandWidths: []int{}},
+	OpFalse:          {Name: "OpFalse", OperandWidths: []int{}},
+	OpMinus:          {Name: "OpMinus", OperandWidths: []int{}},
+	OpBang:           {Name: "OpBang", OperandWidths: []int{}},
+	OpJumpNotTruthy:  {Name: "OpJumpNotTruthy", OperandWidths: []int{2}},
+	OpJump:           {Name: "OpJump", OperandWidths: []int{2}},
+	OpNull:           {Name: "OpNull", OperandWidths: []int{}},
+	OpSetGlobal:      {Name: "OpSetGlobal", OperandWidths: []int{2}},
+	OpGetGlobal:      {Name: "OpGetGlobal", OperandWidths: []int{2}},
+	OpArray:          {Name: "OpArray", OperandWidths: []int{2}},
+	OpHash:           {Name: "OpHash", OperandWidths: []int{2}},
+	OpIndex:          {Name: "OpIndex", OperandWidths: []int{}},
+	OpCall:           {Name: "OpCall", OperandWidths: []int{1}},
+	OpReturnValue:    {Name: "OpReturnValue", OperandWidths: []int{}},
+	OpReturn:         {Name: "OpReturn", OperandWidths: []int{}},
+	OpSetLocal:       {Name: "OpSetLocal", OperandWidths: []int{1}},
+	OpGetLocal:       {Name: "OpGetLocal", OperandWidths: []int{1}},
+	OpGetBuiltin:     {Name: "OpGetBuiltin", OperandWidths: []int{1}},
+	OpClosure:        {Name: "OpClosure", OperandWidths: []int{2, 1}},
+	OpGetFree:        {Name: "OpGetFree", OperandWidths: []int{1}},
+	OpCurrentClosure: {Name: "OpCurrentClosure", OperandWidths: []int{}},
 }
 
 func (ins Instructions) String() string {
@@ -124,6 +130,8 @@ func (ins Instructions) fmtInstruction(def *Definition, operands []int) string {
 		return def.Name
 	case 1:
 		return fmt.Sprintf("%s %d", def.Name, operands[0])
+	case 2:
+		return fmt.Sprintf("%s %d %d", def.Name, operands[0], operands[1])
 	}
 
 	return fmt.Sprintf("ERROR: unhandled operandCount for %s\n", def.Name)
